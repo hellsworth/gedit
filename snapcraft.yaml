@@ -37,6 +37,18 @@ apps:
       GI_TYPELIB_PATH: $SNAP/usr/lib/girepository-1.0:$SNAP/usr/lib/$CRAFT_ARCH_TRIPLET/gedit/girepository-1.0:$SNAP/usr/lib/$CRAFT_ARCH_TRIPLET/girepository-1.0:$SNAP/gnome-platform/usr/lib/girepository-1.0:$SNAP/gnome-platform/usr/lib/$CRAFT_ARCH_TRIPLET/girepository-1.0
 
 parts:
+
+  amtk:
+    source: https://gedit-technology.net/tarballs/amtk/amtk-5.6.1.tar.xz
+# ext:updatesnap
+#   version-format:
+#     allow-neither-tag-nor-branch
+    plugin: meson
+    meson-parameters:
+      - --prefix=/usr
+      - --buildtype=release
+      - -Dgtk_doc=false
+
   gtksourceview:
     source: https://gitlab.gnome.org/GNOME/gtksourceview.git
     source-tag: '4.8.4'
@@ -60,8 +72,38 @@ parts:
       craftctl default
       sed -i 's#Werror=missing-include-dirs#Wmissing-include-dirs#g' meson.build
 
+  libgedit-gtksourceview:
+    source: https://gedit-technology.net/tarballs/libgedit-gtksourceview/libgedit-gtksourceview-299.0.1.tar.xz
+# ext:updatesnap
+#   version-format:
+#     allow-neither-tag-nor-branch
+    plugin: nil
+    override-build: |
+      cd $CRAFT_PART_BUILD
+      ./configure
+      make -j8
+      make install
+      craftctl default
+
+  tepl:
+    after: [ libgedit-gtksourceview ]
+    source: https://gitlab.gnome.org/swilmet/tepl.git
+    source-tag: '6.5.1'
+# ext:updatesnap
+#   version-format:
+#     lower-than: '5'
+#     no-9x-revisions: true
+    source-depth: 1
+    plugin: meson
+    meson-parameters:
+     - --prefix=/usr
+     - --buildtype=release
+     - -Dgtk_doc=false
+    build-environment:
+      - PATH: $PATH:$CRAFT_PROJECT_DIR/libgedit-gtksourceview/build/gtksourceview
+
   gedit:
-    after: [ gtksourceview ]
+    after: [ amtk, gtksourceview, libgedit-gtksourceview, tepl ]
     source: https://gitlab.gnome.org/GNOME/gedit.git
     source-tag: '43.2'
 # ext:updatesnap
@@ -77,7 +119,7 @@ parts:
       - --buildtype=release
       - -Dvala_args="--vapidir=$CRAFT_STAGE/usr/share/vala/vapi"
     build-environment:
-      - C_INCLUDE_PATH: $CRAFT_STAGE/usr/include/gtksourceview-4
+      - C_INCLUDE_PATH: $CRAFT_STAGE/usr/include/gtksourceview-4:$CRAFT_STAGE/usr/include/amtk-5
       - PYTHONPATH: /snap/gnome-42-2204-sdk/current/usr/lib/x86_64-linux-gnu/gobject-introspection${PYTHONPATH:+:$PYTHONPATH}
     override-build: |
       sed -i.bak -e 's|Icon=org.gnome.gedit$|Icon=${SNAP}/meta/gui/org.gnome.gedit.svg|g' $CRAFT_PART_SRC/data/org.gnome.gedit.desktop.in
@@ -85,8 +127,6 @@ parts:
       craftctl default
       mkdir -p $CRAFT_PART_INSTALL/meta/gui/
       cp $CRAFT_PART_SRC/data/icons/org.gnome.gedit.svg $CRAFT_PART_INSTALL/meta/gui/
-    build-packages:
-      - libamtk-5-dev
 
   gedit-plugins:
     after: [ gedit ]
